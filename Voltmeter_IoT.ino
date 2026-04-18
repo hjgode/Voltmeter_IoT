@@ -11,8 +11,6 @@ WiFiClient wifiClient;
 MQTTClient mqtt = MQTTClient(256);
 #define CLIENT_ID "ESP32-001"  // CHANGE IT AS YOU DESIRE
 
-const char* outTopic ="esp32/voltage";
-
 const char MQTT_BROKER_ADRRESS[] = "192.168.0.40";  // CHANGE TO MQTT BROKER'S IP ADDRESS
 const int MQTT_PORT = 1883;
 
@@ -24,6 +22,7 @@ unsigned long lastExecutedMillis_1 = 0; // vairable to save the last executed ti
 
 //IPAddress mqttserver=(192,168,0,40);
 #define PUBLISH_TOPIC "esp32-001/voltage"
+#define PUBLISH_TOPIC_RAW "esp32-001/rawADC"
 
 // Wi-Fi credentials for AP mode
 const char* ssid = "Horst1";
@@ -96,7 +95,7 @@ const char* htmlPage = R"rawliteral(
     <div class="container">
         <h1>IndusVoltmeter</h1>
         <p class="voltage-display">Voltage: <span id="voltage">--</span> V</p>
-        <button id="rangeToggle" class="toggle-button">Switch to 3V3 Range</button>
+        <button id="rangeToggle" class="toggle-button" disabled>Switch to 3V3 Range</button>
     </div>
     <script>
         const voltageElement = document.getElementById("voltage");
@@ -167,6 +166,7 @@ void connectWifi(){
     Serial.println("WiFi connected");
     Serial.println("IP address: ");
     Serial.println(WiFi.localIP());  
+    //WiFi.setAutoReconnect(true);
 }
 
 //time
@@ -213,6 +213,14 @@ float getVoltage(){
     return actualVoltage;
 }
 
+float getRawADC(){
+    float rawADC = analogRead(adcPin);
+    Serial.print("Raw ADC: ");      //3v3   1v5
+    Serial.println(rawADC);         //224   23
+
+    return rawADC;
+}
+
 bool timeElapsed(int mydelay){
    unsigned long currentMillis = millis(); 
    if (currentMillis - lastExecutedMillis_1 >= mydelay) {
@@ -231,13 +239,15 @@ void setup() {
   analogSetAttenuation(ADC_11db); // Configure ADC for 0-3.3V range
 
   // start Wifi Client
+  connectWifi();
+  /*
     WiFi.begin(ssid, password);
 
     while (WiFi.status() != WL_CONNECTED) {
         delay(500);
         Serial.print(".");
     }
-    
+  */  
     ArduinoOTA.begin();  // Starts OTA
 
     Serial.println("");
@@ -302,7 +312,11 @@ void loop() {
 
   //only execute every x seconds (millis)
   if (timeElapsed(5000)) {
+    if (WiFi.status() != WL_CONNECTED){
+      connectWifi();
+    }
     float actualVoltage=getVoltage();
+    float rawADC=getRawADC();
     if (!mqtt.connected()) {
       Serial.println("reconnect mqtt...");
       connectToMQTT();
@@ -312,8 +326,11 @@ void loop() {
 
       String strVoltage=String(actualVoltage,1);
       String strPublishTopic=String(PUBLISH_TOPIC);
+      String strRawADC=String(rawADC);
+      String strPublishTopicRaw=String(PUBLISH_TOPIC_RAW);
       
       mqtt.publish(strPublishTopic.c_str(), strVoltage.c_str()); //, strlen(strVoltage.c_str()), true); //retain=true
+      mqtt.publish(strPublishTopicRaw.c_str(), strRawADC.c_str()); //, strlen(strRawADC.c_str()), true); //retain=true
 /*
       char tempString[8];
       dtostrf(actualVoltage, 4, 2, tempString);
