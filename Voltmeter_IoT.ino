@@ -118,7 +118,7 @@ const char* htmlPage = R"rawliteral(
         });
 
         // Periodically fetch voltage
-        setInterval(fetchVoltage, 1000);
+        setInterval(fetchVoltage, 5000);
     </script>
 </body>
 </html>
